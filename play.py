@@ -31,6 +31,12 @@ def make_amplitudes(mode = 'natural'):
     if mode == 'geometric':
         return [1./(2**i) for i in range(1, harmonics+1)]
 
+def make_phases(mode = 'equal'):
+    if mode == 'equal':
+        return [1 for i in range(1, harmonics+1)]
+    if mode == 'stringed':
+        return [pi*((i-1)%2) for i in range(1, harmonics+1)]
+
 def make_wav(song, filename='music.wav', mode='natural'):
     music = wave.open(filename, 'wb')
     music.setnchannels(1)
@@ -45,9 +51,10 @@ def make_wav(song, filename='music.wav', mode='natural'):
         periods = [float(framerate)/freq for freq in freqs]
         frame_rads = [2*pi / float(period) for period in periods]
         amps = make_amplitudes(mode)
+        phases = make_phases(mode)
         max_val = float(globals()['max_val']) / sum(amps)
         for frame in range(round(framerate * duration)):
-            value = max_val * sum([sin(rad_amp[0] *frame)*rad_amp[1] for rad_amp in zip(frame_rads, amps)])
+            value = max_val * sum([sin(phase + rads * frame) * amp for rads, amp, phase in zip(frame_rads, amps, phases)])
             frame = pack_correct(value)
             frames += frame
             #music.writeframesraw(frame)
