@@ -6,7 +6,6 @@ framerate = 44100
 sampwidth = 2 # in bytes, setting to 1 gives us 8 bit music
 max_val = 2 ** (sampwidth * 8 - 1) - 1 # maximum value of a signed int with sampwidth*8 bits
 harmonics = 7
-#twelth_root_of_2 = 1.05946309435929526455 # equal temp 12 tonal music.
 
 def pack_correct(val, audio_format='wav'):
     if audio_format == 'wav':
