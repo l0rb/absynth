@@ -103,6 +103,15 @@ class Frames():
         self._dur = value
         self._nframes = round(self.framerate * self._dur)
 
+    def apply_asr(self, a=0.1, r=0.2):
+        nframes = len(self.raw)
+        aframes = nframes * a
+        rframes = nframes * r
+        for i in range(round(aframes)):
+            self.raw[i] *= (i/aframes)
+        for i in range(round(rframes)):
+            self.raw[i*-1] *= (i/rframes)
+
     def add_partial(self, p): # p is also a Frame object
         """
         assert len(p.raw) == len(self.raw), "can't add samples of different length (yet)"
@@ -140,6 +149,7 @@ def make_frames2(note, mode='natural', audio_format='wav'):
     frames = Frames(duration=duration)
     s = frames.create_sin_array(freq)
     frames.add_array(s)
+    frames.apply_asr()
     return frames.raw
 
 
