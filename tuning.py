@@ -36,7 +36,7 @@ class ET12(): # 12 tone equal temperament
     def _modifier(self, note):
         if len(note) < 3:
             return 0
-        modifier = note[3]
+        modifier = note[2]
         if modifier in ['+', '#']:
             return 1
         if modifier in ['-', 'b']:
