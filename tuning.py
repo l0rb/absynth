@@ -32,10 +32,21 @@ class ET12(): # 12 tone equal temperament
         if tone not in self.tones:
             self.tones[tone] = self.base_freq * self.ratio(tone, self.base_tone)
         return self.tones[tone]
-        
+    
+    def _modifier(self, note):
+        if len(note) < 3:
+            return 0
+        modifier = note[3]
+        if modifier in ['+', '#']:
+            return 1
+        if modifier in ['-', 'b']:
+            return -1
+
     def ratio(self, a, b):
         octaves = int(a[1]) - int(b[1])
-        semitones = self.relative_to_c[a[0]] - self.relative_to_c[b[0]]
+        mod_a = self._modifier(a)
+        mod_b = self._modifier(b)
+        semitones = self.relative_to_c[a[0]] + mod_a - (self.relative_to_c[b[0]] + mod_b)
         exponent = octaves * 12 + semitones
         return self.twelth_root_of_2 ** exponent
 
