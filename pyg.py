@@ -4,15 +4,9 @@ import sys
 import wave
 import pygame
 from pygame.locals import *
-import numpy as np
 import tuning
 
-from play import make_frames, make_frames2, make_wav, song, sampwidth, framerate
-
-def make_sndarray(song, mode='natural'):
-    frames = make_frames2(song[0], mode, 'pygame')
-    #frames = np.array(make_frames(song, mode, 'pygame'), dtype=np.int16)
-    return frames
+from play import make_frames, make_sndarray, make_wav, song, sampwidth, framerate
 
 #framerate = 44100
 

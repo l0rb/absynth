@@ -4,17 +4,10 @@ import sys
 import wave
 import pygame
 from pygame.locals import *
-import numpy as np
 import tuning
 from time import sleep
 
-from play import make_frames, make_frames2, make_wav, song, sampwidth, framerate
-
-def make_sndarray(song, mode='natural'):
-    frames = np.array([], dtype=np.int16)
-    for note in song:
-        frames = np.concatenate((frames, make_frames2(note, mode, 'pygame')))
-    return frames
+from play import make_frames, make_sndarray, make_wav, song, sampwidth, framerate
 
 pygame.mixer.pre_init(frequency=framerate, size=sampwidth*8, channels=1)
 pygame.init()

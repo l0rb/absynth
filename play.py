@@ -2,11 +2,11 @@ import wave
 from math import sin, pi
 from struct import pack
 import numpy as np
+import harmonics
 
 framerate = 44100
 sampwidth = 2 # in bytes, setting to 1 gives us 8 bit music
 max_val = 2 ** (sampwidth * 8 - 1) - 1 # maximum value of a signed int with sampwidth*8 bits
-harmonics = 7
 
 def pack_correct(val, audio_format='wav'):
     if audio_format == 'wav':
@@ -71,11 +71,9 @@ def make_wav(song, filename='music.wav', mode='natural'):
 
 class Frames():
     """
-    we want to be able to mess with the individual partials of a tone or song,
-    and we want to be able to add/subtract waves or whole tones/songs together.
-    that is what this class exists for. it is probably most elegant if all the
-    partials are themselves Frames() objects? (not super-sure about that, give
-    thought to cycles vs non-periodic frames, and also envelops)
+    we want to be able to mess with the individual partials of a tone, and we
+    want to be able to add/subtract waves or whole tones together. that is what
+    this class exists for. the partials are numpy arrays
     """
     
     def _init_max_val(self):
@@ -85,7 +83,7 @@ class Frames():
     def __init__(self, framerate=44100, sampwidth=2, duration=0.4):
         self.partials = list()
         self._dtype = np.dtype('i{}'.format(sampwidth))
-        self.raw = np.array([], dtype=self._dtype)
+        self.raw = np.empty(0, dtype=self._dtype)
         self.framerate = framerate 
         self._dur = duration
         self._nframes = round(self.framerate * self._dur)
@@ -104,32 +102,24 @@ class Frames():
         self._nframes = round(self.framerate * self._dur)
 
     def apply_asr(self, a=0.1, r=0.2):
+        assert a+r < 1, "attack and release can't overlap"
         nframes = len(self.raw)
         aframes = nframes * a
         rframes = nframes * r
+        self.post_asr = np.copy(self.raw)
         for i in range(round(aframes)):
-            self.raw[i] *= (i/aframes)
+            self.post_asr[i] *= (i/aframes)
         for i in range(round(rframes)):
-            self.raw[i*-1] *= (i/rframes)
-
-    def add_partial(self, p): # p is also a Frame object
-        """
-        assert len(p.raw) == len(self.raw), "can't add samples of different length (yet)"
-        assert p.sampwidth == self.sampwidth, "can't add samples of different width (yet)"
-        self.partials.append(p)
-        for frame_n, frame_val in enumerate(p.raw):
-            self.raw[frame_n] += frame_val
-            self.raw[frame_n] /= 2
-        """
-        pass
+            self.post_asr[i*-1] *= (i/rframes)
 
     def add_array(self, arr:np.array): # arr has to be numpy array
         assert self._dtype == arr.dtype, "can't add array of different width (yet)"
-        if not self.raw:
+        if not len(self.raw):
             self.raw = np.resize(arr, self._nframes)
         else:
             assert len(self.raw) == len(arr)
-            self.raw = (self.raw + arr) / 2
+            self.raw = ((self.raw + arr) / 2).astype(self._dtype)
+        self.partials.append(arr)
 
     def create_sin_array(self, freq, amp=1, phase=0): # phase is in radians
         assert 0 < amp <= 1
@@ -147,11 +137,11 @@ def make_frames2(note, mode='natural', audio_format='wav'):
     duration = note[1]
     freq = note[0]
     frames = Frames(duration=duration)
-    s = frames.create_sin_array(freq)
-    frames.add_array(s)
+    for wave in harmonics.Natural(freq):
+        s = frames.create_sin_array(wave.frequency, wave.amplitude, wave.phase)
+        frames.add_array(s)
     frames.apply_asr()
-    return frames.raw
-
+    return frames.post_asr
 
 def make_frames(song, mode='natural', audio_format='wav'):
     frames = list()
@@ -172,6 +162,12 @@ def make_frames(song, mode='natural', audio_format='wav'):
             frames.append(frame)
     if audio_format == 'wav':
         frames = b''.join(frames)
+    return frames
+
+def make_sndarray(song, mode='natural'):
+    frames = np.empty(0, dtype=np.int8) # need to set dtype here, because it would default to float and concat would than create float arrays. int8 is fine and the concat will just upcast it to the desired sampwidth (int8 is smallest possible)
+    for note in song:
+        frames = np.concatenate((frames, make_frames2(note, mode, 'pygame')))
     return frames
 
 
