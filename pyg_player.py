@@ -33,8 +33,9 @@ ninth = ['b3', 'b3', 'c4', 'd4', 'd4', 'c4', 'b3', 'a3', 'g3', 'g3', 'a3', 'b3',
 
 composition = compose(ninth, 0.3)
 
-snd_array = make_sndarray(composition)
+snd_array = make_sndarray(composition, mode='dense')
 song = pygame.sndarray.make_sound(snd_array)
+print('play')
 c = song.play()
 while c.get_busy():
     sleep(0.2)

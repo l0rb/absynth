@@ -2,7 +2,7 @@ import wave
 from math import sin, pi
 from struct import pack
 import numpy as np
-import harmonics
+import overtones
 
 framerate = 44100
 sampwidth = 2 # in bytes, setting to 1 gives us 8 bit music
@@ -137,7 +137,12 @@ def make_frames2(note, mode='natural', audio_format='wav'):
     duration = note[1]
     freq = note[0]
     frames = Frames(duration=duration)
-    for wave in harmonics.Natural(freq):
+    waves = {
+        'natural': overtones.Natural(freq, n=1),
+        'tempered': overtones.Tempered(freq, n=4, factor=1.5),
+        'dense': overtones.Dense(freq),
+    }[mode]
+    for wave in waves:
         s = frames.create_sin_array(wave.frequency, wave.amplitude, wave.phase)
         frames.add_array(s)
     frames.apply_asr()
