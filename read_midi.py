@@ -90,7 +90,6 @@ class MidiFileIO(io.FileIO):
         form = f.read16bit()
         tracks = f.read16bit()
         division = f.read_division()
-        print('TRACKS', tracks)
         return form, tracks, division
 
     def read_meta(f):
@@ -100,18 +99,18 @@ class MidiFileIO(io.FileIO):
         if event_type == b'\x01':
             length, bytes_read = f.readvarint()
             txt = f.read(length)
-            print('TXT', txt)
+            #print('TXT', txt)
         if event_type == b'\x03':
             length, bytes_read = f.readvarint()
             txt = f.read(length)
-            print('TRACK NAME', txt)
+            #print('TRACK NAME', txt)
         if event_type == b'\x51':
             tempo = f.read(4)
-            print('TEMPO', tempo)
+            #print('TEMPO', tempo)
             bytes_read = 4
         if event_type == b'\x2f':
             f.read(1)
-            print('TRACK END')
+            #print('TRACK END')
             bytes_read = 1
         return 1+length+bytes_read
 
@@ -141,9 +140,7 @@ class MidiFileIO(io.FileIO):
     def read_track(f):
         chunk_type = f.read(4)
         chunk_length = f.read32bit()
-        print(chunk_type)
         assert chunk_type == CHUNK_TYPE_TRACK
-        print(chunk_length)
         track = list()
         bytes_left = chunk_length
         while bytes_left != 0:
@@ -161,7 +158,6 @@ class MidiFileIO(io.FileIO):
             running = event_byte
             bytes_left -= (1+bytes_read)
         f.tracks.append(track)
-        print('end of track')
         assert bytes_left == 0
 
 path = 'Uriah_Heep_Lady_In_Black.mid'
