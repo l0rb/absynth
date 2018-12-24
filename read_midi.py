@@ -1,5 +1,6 @@
 import struct
 import io
+import collections
 
 CHUNK_TYPE_HEADER = b'MThd'
 CHUNK_TYPE_TRACK = b'MTrk'
@@ -9,17 +10,52 @@ class DivisionFormat(Exception):
 class EventUnknown(Exception):
     pass
 
+class MidiEvent():
+    NOTE_ON = 0
+    NOTE_OFF = 1
+    CONTROLLER_CHANGE = 2
+    PROGRAM_CHANGE = 3
+    PITCH_BENDER = 4
+    _data_size = {
+        NOTE_ON: 2,
+        NOTE_OFF: 2,
+        CONTROLLER_CHANGE: 2,
+        PROGRAM_CHANGE: 1,
+        PITCH_BENDER: 2
+    }
+    
+    def __init__(self, event_byte, event_time):
+        self.byte = event_byte
+        self.time = event_time
+        self.channel = -1
+
+    def read(self, f, event_type):
+        self.type = event_type
+        self.data = f.read(self._data_size[self.type])
+        return self
+
 class MidiFileIO(io.FileIO):
     def __init__(self, path_to_file):
         super().__init__(path_to_file, 'rb')
+        EventType = collections.namedtuple('EventType', ['begin', 'end', 'type'])
+        self.event_types = {
+            EventType(b'\x80', b'\x8F', MidiEvent.NOTE_OFF),
+            EventType(b'\x90', b'\x9F', MidiEvent.NOTE_ON),
+            EventType(b'\xB0', b'\xBF', MidiEvent.CONTROLLER_CHANGE),
+            EventType(b'\xC0', b'\xCF', MidiEvent.PROGRAM_CHANGE),
+            EventType(b'\xE0', b'\xEF', MidiEvent.PITCH_BENDER),
+        }
+        self.tracks = list()
         with self as f:
-            for _ in range(f.tracks):
+            for _ in range(f.ntracks):
                 f.read_track()
 
     def __enter__(self, *args, **kwargs):
         f = super().__enter__(*args, **kwargs)
-        form, tracks, division = f.read_header()
-        self.tracks = tracks
+        form, ntracks, division = f.read_header()
+        self.ntracks = ntracks
+        self.format = form
+        self.division = division
         return f
 
     def read8bit(f):
@@ -54,9 +90,6 @@ class MidiFileIO(io.FileIO):
         form = f.read16bit()
         tracks = f.read16bit()
         division = f.read_division()
-        if division == -1:
-            print('division format not supported')
-            return
         print('TRACKS', tracks)
         return form, tracks, division
 
@@ -64,7 +97,6 @@ class MidiFileIO(io.FileIO):
         length = 0
         bytes_read = 0
         event_type = f.read(1)
-        print('EVENT TYPE', hex(ord(event_type)))
         if event_type == b'\x01':
             length, bytes_read = f.readvarint()
             txt = f.read(length)
@@ -90,70 +122,20 @@ class MidiFileIO(io.FileIO):
         print('SKIP SYSEX BYTES', r, se.hex())
         return r
 
-    def read_controller_change(f, channel):
-        data = f.read(2)
-        bytes_read = 2
-        print('CHANNEL', channel, 'data', hex(data[0]))
-        if data[0] < 0x78 or data[0] > 0x7f:
-            print('CHANNEL VOICE MESSAGE on CONTROLLER', hex(data[0]), hex(data[1]))
-        else:
-            if data[0] == 0x79:
-                reset_all_controllers()
-            else:
-                print('UNHANDLED CHAN MOD')
-        return bytes_read
-
-    def read_pitch_bender(f, channel):
-        print('PITCH BENDER')
-        data = f.read(2)
-        bytes_read = 2
-        return bytes_read
-
-    def read_program_change(f, channel):
-        print('PROGRAM CHANGE')
-        data = f.read(1)
-        bytes_read = 1
-        return bytes_read
-
-    def read_note_on(f, channel):
-        data = f.read(2)
-        key = hex(data[0])
-        velocity = hex(data[1])
-        print('NOTE ON', key, velocity)
-        return 2
-
-    def read_note_off(f, channel):
-        data = f.read(2)
-        key = hex(data[0])
-        velocity = hex(data[1])
-        print('NOTE OFF', key, velocity)
-        return 2
-
     def read_event(f, event):
-        if event == b'\xFF':
+        if event.byte == b'\xFF':
             bytes_read = f.read_meta()
-        elif event == b'\xF0':
+        elif event.byte == b'\xF0':
             bytes_read = f.read_sysex()
-        elif b'\x80' <= event <= b'\x8F': # note on
-            channel = ord(event) - ord(b'\x90')
-            bytes_read = f.read_note_off(channel)
-        elif b'\x90' <= event <= b'\x9F': # note on
-            channel = ord(event) - ord(b'\x90')
-            bytes_read = f.read_note_on(channel)
-        elif b'\xB0' <= event <= b'\xBF': # controller change
-            channel = ord(event) - ord(b'\xB0')
-            bytes_read = f.read_controller_change(channel)
-        elif b'\xB0' <= event <= b'\xBF': # controller change
-            channel = ord(event) - ord(b'\xB0')
-            bytes_read = f.read_controller_change(channel)
-        elif b'\xC0' <= event <= b'\xCF': # program change
-            channel = ord(event) - ord(b'\xC0')
-            bytes_read = f.read_program_change(channel)
-        elif b'\xE0' <= event <= b'\xEF': # pitch bender
-            channel = ord(event) - ord(b'\xE0')
-            bytes_read = f.read_pitch_bender(channel)
         else:
-            raise EventUnknown('Event {} not known'.format(event))
+            for event_type in f.event_types:
+                if event_type.begin <= event.byte <= event_type.end:
+                    event.channel = ord(event.byte) - ord(event_type.begin)
+                    event.read(f, event_type.type)
+                    bytes_read = len(event.data)
+                    break
+            else:
+                raise EventUnknown('Event {} not known'.format(event))
         return bytes_read
  
     def read_track(f):
@@ -162,29 +144,26 @@ class MidiFileIO(io.FileIO):
         print(chunk_type)
         assert chunk_type == CHUNK_TYPE_TRACK
         print(chunk_length)
+        track = list()
         bytes_left = chunk_length
         while bytes_left != 0:
             event_time, bytes_read = f.readvarint()
-            print('EVENT_TIME', event_time)
             bytes_left -= bytes_read
-            event = f.read(1)
-            if event < b'\x80':
+            event_byte = f.read(1)
+            if event_byte < b'\x80':
                 # handle running status by moving file pointer back by 1 and set event to the running event
                 f.seek(-1, io.SEEK_CUR)
-                event = running
+                event_byte = running
                 bytes_left += 1
-                print('RUNNING EVENT', hex(ord(event)))
-            else:
-                print('EVENT', hex(ord(event)))
+            event = MidiEvent(event_byte, event_time)
+            track.append(event)
             bytes_read = f.read_event(event)
-            running = event
+            running = event_byte
             bytes_left -= (1+bytes_read)
+        f.tracks.append(track)
         print('end of track')
         assert bytes_left == 0
 
-def reset_all_controllers():
-    print('RESET ALL CONTROLLERS')
-
 path = 'Uriah_Heep_Lady_In_Black.mid'
 midi = MidiFileIO(path)
-print(midi.tracks)
+print(len(midi.tracks))
