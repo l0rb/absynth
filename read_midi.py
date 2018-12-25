@@ -16,22 +16,21 @@ class MidiEvent():
     CONTROLLER_CHANGE = 2
     PROGRAM_CHANGE = 3
     PITCH_BENDER = 4
-    _data_size = {
-        NOTE_ON: 2,
-        NOTE_OFF: 2,
-        CONTROLLER_CHANGE: 2,
-        PROGRAM_CHANGE: 1,
-        PITCH_BENDER: 2
-    }
-    
+
     def __init__(self, event_byte, event_time):
         self.byte = event_byte
         self.time = event_time
         self.channel = -1
+    
+    def _data_size(self):
+        if self.type in {self.PROGRAM_CHANGE}:
+            return 1
+        else:
+            return 2
 
     def read(self, f, event_type):
         self.type = event_type
-        self.data = f.read(self._data_size[self.type])
+        self.data = f.read(self._data_size())
         return self
 
 class MidiFileIO(io.FileIO):
